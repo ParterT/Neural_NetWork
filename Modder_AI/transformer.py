@@ -3,13 +3,14 @@ import torch.nn as nn
 import math
 
 class Transformer(nn.Module):
-    def __init__(self, embedding_dim, attention_dim, hidden_dim, head_num):
+    def __init__(self, embedding_dim, attention_dim, hidden_dim, head_num, dropout):
         super().__init__()
 
         assert attention_dim % head_num == 0
 
         self.num_head = head_num
         self.head_dim = attention_dim // head_num
+        self.dropout = nn.Dropout(dropout)
 
         self.query = nn.Linear(embedding_dim, attention_dim)
         self.key = nn.Linear(embedding_dim, attention_dim)
@@ -42,6 +43,7 @@ class Transformer(nn.Module):
 
         scores = scores.masked_fill(mask, float('-inf'))
         weights = torch.softmax(scores, dim=-1)
+        weights = self.dropout(weights)
 
         result = weights @ V
 
@@ -49,22 +51,7 @@ class Transformer(nn.Module):
         result = result.view(batch_size, seq_len, self.num_head * self.head_dim)
         result = self.out(result)
 
-        x = self.norm(x + result)
-        x = self.norm2(x + self.ffn(x))
+        x = self.norm(x + self.dropout(result))
+        x = self.norm2(x + self.dropout(self.ffn(x)))
 
         return x
-
-
-if __name__ == "__main__":
-    block = Transformer(
-        embedding_dim=32,
-        attention_dim=32,
-        hidden_dim=128,
-        head_num=2
-    )
-
-    x = torch.randn(16, 32, 32)
-    output = block(x)
-
-    print("Вход:", x.shape)
-    print("Выход:", output.shape)

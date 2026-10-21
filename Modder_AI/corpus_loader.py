@@ -4,6 +4,8 @@ import torch
 
 EXTENSIONS = (".txt", ".md", ".java")
 
+# OLD BLOCK
+"""
 def load_text():
     direct = Path("Data_corpus")
     text = []
@@ -13,7 +15,35 @@ def load_text():
             text.append(path.read_text(encoding="utf-8", errors="ignore"))
 
     return "\n".join(text)
+"""
 
+def load_texts():
+    direct = Path("Data_corpus")
+    texts = []
+    for path in sorted(direct.rglob("*")):
+        if path.is_file() and path.suffix.lower() in EXTENSIONS:
+            texts.append(path.read_text(encoding="utf-8", errors="ignore"))
+
+    return texts
+
+def load_text():
+    return "\n".join(load_texts())
+
+def load_data():
+    texts = load_texts()
+    char_to_id, id_to_char = char_mod("\n".join(texts))
+
+    train_part, val_part = [], []
+
+    for text in texts:
+        cut = int(len(text) * 0.9)
+        train_part.append(text[:cut])
+        val_part.append(text[cut:])
+
+    train_ids = torch.tensor(encoder("\n".join(train_part), char_to_id), dtype=torch.long)
+    val_ids = torch.tensor(encoder("\n".join(val_part), char_to_id), dtype=torch.long)
+
+    return train_ids, val_ids, char_to_id, id_to_char
 def char_mod(text):
     chars = sorted(set(text))
 

@@ -4,7 +4,7 @@ from config import *
 from corpus_loader import encoder, decoder
 from model import CharNN
 
-def generator(path = "models/best_model.pt"):
+def generator(path = "models/best_model_dropout.pt"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     checkpoint = torch.load(path, map_location=device)
@@ -17,7 +17,9 @@ def generator(path = "models/best_model.pt"):
         embedding_dim=EMBEDDING_DIM,
         attention_dim=ATTENTION_DIM,
         hidden_dim=HIDDEN_DIM,
-        head_num=HEAD_NUM
+        head_num=HEAD_NUM,
+        layers_num=LAYER_NUM,
+        dropout=DROPOUT,
     ).to(device)
 
     model.load_state_dict(checkpoint["model_state"])
@@ -27,7 +29,7 @@ def generator(path = "models/best_model.pt"):
 
 
 @torch.no_grad()
-def generate(model, char_to_id, id_to_char, device, prompt, length, temperature):
+def generate(model, char_to_id, id_to_char, device, prompt, length, temperature, top_k=None):
     ids = encoder(prompt, char_to_id)
 
     for _ in range(length):
@@ -37,17 +39,24 @@ def generate(model, char_to_id, id_to_char, device, prompt, length, temperature)
     return decoder(ids, id_to_char)
 
 @torch.no_grad()
-def sample_text(model, char_to_id, device, temperature):
+def sample_text(model, char_to_id, device, temperature, top_k=None):
     context = char_to_id[-BLOCK_SIZE:]
     x = torch.tensor([context], dtype=torch.long, device=device)
 
     logits = model(x)
     logits = logits[0, -1, :] / temperature
-    probs = torch.softmax(logits, dim=-1)
 
+    if top_k is not None:
+        top_k = min(top_k, logits.size(-1))
+        values, _ = torch.topk(logits, top_k)
+        logits[logits < values[-1]] = float("-inf")
+
+    probs = torch.softmax(logits, dim=-1)
     return torch.multinomial(probs, 1).item()
 
 if __name__ == "__main__":
     model, char_to_id, id_to_char, device = generator()
 
-    print(generate(model, char_to_id, id_to_char, device, prompt="Нейронная сеть ", length=LENGTH, temperature=TEMPERATURE))
+    for prompt in ["public class ", "# Registering "]:
+        print(generate(model, char_to_id, id_to_char, device, prompt, LENGTH, TEMPERATURE, 10))
+        print("-"*40)
